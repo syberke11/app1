@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, RefreshControl, TextInput, Dimensions, Pressable } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { Trophy, Medal, Award, Crown, BookOpen, Star, Search, TrendingUp, Filter } from 'lucide-react-native';
+import { Trophy, Medal, Award, Crown, BookOpen, Star, Search, TrendingUp, ListFilter as Filter } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeInDown, FadeInUp, SlideInRight } from 'react-native-reanimated';
