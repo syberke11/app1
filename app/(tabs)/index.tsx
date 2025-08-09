@@ -8,6 +8,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BookOpen, Award, Users, TrendingUp, Calendar, Star, Trophy, Clock, Target, CirclePlus as PlusCircle } from 'lucide-react-native';
 import Animated, { FadeInDown, FadeInUp, SlideInRight } from 'react-native-reanimated';
+import { QuranHistory } from '@/components/QuranHistory';
 
 const { width } = Dimensions.get('window');
 
@@ -270,6 +271,11 @@ export default function HomeScreen() {
               {renderStatsCard(Clock, 'Menunggu Penilaian', stats.setoranPending || 0, '#F59E0B')}
             </>
           )}
+        </Animated.View>
+
+        {/* Quran Reading History */}
+        <Animated.View entering={FadeInUp.delay(250)}>
+          <QuranHistory />
         </Animated.View>
 
         {/* Progress Cards for Students */}
