@@ -1,11 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, TextInput, Dimensions  } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, TextInput, Dimensions, Pressable } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { Trophy, Medal, Award, Crown, BookOpen, Star, Search } from 'lucide-react-native';
+import { Trophy, Medal, Award, Crown, BookOpen, Star, Search, TrendingUp, Filter } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated, { FadeInDown, FadeInUp, SlideInRight } from 'react-native-reanimated';
+
 const { width } = Dimensions.get('window');
 const podiumWidth = width * 0.28;
 const podiumGap = width * 0.01;
+
 interface LeaderboardEntry {
   id: string;
   name: string;
@@ -17,10 +22,12 @@ interface LeaderboardEntry {
 
 export default function LeaderboardScreen() {
   const { profile } = useAuth();
+  const insets = useSafeAreaInsets();
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [filteredLeaderboard, setFilteredLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [myRank, setMyRank] = useState<LeaderboardEntry | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [filterType, setFilterType] = useState<'all' | 'hafalan' | 'quiz'>('all');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -94,9 +101,32 @@ export default function LeaderboardScreen() {
     }
   };
 
+  const applyFilter = () => {
+    let filtered = leaderboard;
+    
+    if (searchQuery.trim() !== '') {
+      filtered = filtered.filter(entry =>
+        entry.name.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+
+    // Sort based on filter type
+    if (filterType === 'hafalan') {
+      filtered = filtered.sort((a, b) => b.poin_hafalan - a.poin_hafalan);
+    } else if (filterType === 'quiz') {
+      filtered = filtered.sort((a, b) => b.poin_quiz - a.poin_quiz);
+    }
+
+    setFilteredLeaderboard(filtered);
+  };
+
   useEffect(() => {
     fetchLeaderboard();
   }, [profile]);
+
+  useEffect(() => {
+    applyFilter();
+  }, [searchQuery, filterType, leaderboard]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -129,14 +159,24 @@ export default function LeaderboardScreen() {
       }
     >
       {/* Header */}
-      <View style={styles.header}>
-        <Trophy size={32} color="#F59E0B" />
-        <Text style={styles.headerTitle}>Leaderboard</Text>
-        <Text style={styles.headerSubtitle}>Peringkat berdasarkan total poin</Text>
-      </View>
+      <Animated.View entering={FadeInUp} style={[styles.header, { paddingTop: insets.top + 20 }]}>
+        <LinearGradient
+          colors={['#F59E0B', '#EF4444']}
+          style={styles.headerGradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        >
+          <View style={styles.headerIcon}>
+            <Trophy size={32} color="white" />
+          </View>
+          <Text style={styles.headerTitle}>Leaderboard</Text>
+          <Text style={styles.headerSubtitle}>Kompetisi pembelajaran Quran</Text>
+        </LinearGradient>
+      </Animated.View>
 
-      {/* Search */}
-      <View style={styles.searchContainer}>
+      {/* Search and Filter */}
+      <Animated.View entering={FadeInUp.delay(100)} style={styles.searchFilterContainer}>
+        <View style={styles.searchContainer}>
         <Search size={20} color="#9CA3AF" />
         <TextInput
           style={styles.searchInput}
@@ -145,70 +185,116 @@ export default function LeaderboardScreen() {
           onChangeText={handleSearch}
           placeholderTextColor="#9CA3AF"
         />
+        </View>
+        
+        <View style={styles.filterContainer}>
+          <Filter size={16} color="#6B7280" />
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            {[
+              { key: 'all', label: 'Semua' },
+              { key: 'hafalan', label: 'Hafalan' },
+              { key: 'quiz', label: 'Quiz' },
+            ].map((filter) => (
+              <Pressable
+                key={filter.key}
+                style={[
+                  styles.filterButton,
+                  filterType === filter.key && styles.filterButtonActive
+                ]}
+                onPress={() => setFilterType(filter.key as any)}
+              >
+                <Text style={[
+                  styles.filterButtonText,
+                  filterType === filter.key && styles.filterButtonTextActive
+                ]}>
+                  {filter.label}
+                </Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
+      </Animated.View>
       </View>
 
       {/* My Rank Card */}
       {myRank && (
-        <View style={styles.myRankCard}>
+        <Animated.View entering={FadeInUp.delay(200)} style={styles.myRankCard}>
           <Text style={styles.myRankTitle}>Peringkat Saya</Text>
           <View style={styles.myRankContent}>
-            <View style={[styles.rankBadge, { backgroundColor: getRankColor(myRank.rank) }]}>
+            <LinearGradient
+              colors={[getRankColor(myRank.rank), getRankColor(myRank.rank) + 'CC']}
+              style={styles.rankBadge}
+            >
               <Text style={styles.rankNumber}>#{myRank.rank}</Text>
-            </View>
+            </LinearGradient>
             <View style={styles.myRankInfo}>
               <Text style={styles.myRankName}>{myRank.name}</Text>
               <Text style={styles.myRankPoints}>{myRank.total_poin} poin</Text>
+              <View style={styles.pointsBreakdownMy}>
+                <Text style={styles.pointsDetailMy}>
+                  Hafalan: {myRank.poin_hafalan} • Quiz: {myRank.poin_quiz}
+                </Text>
+              </View>
             </View>
           </View>
-        </View>
+        </Animated.View>
       )}
 
       {/* Top 3 Podium */}
       {filteredLeaderboard.length >= 3 && searchQuery === '' && (
-        <View style={styles.podiumContainer}>
+        <Animated.View entering={FadeInUp.delay(300)} style={styles.podiumContainer}>
           <Text style={styles.sectionTitle}>Top 3 Siswa Terbaik</Text>
           <View style={styles.podium}>
             {/* 2nd Place */}
             {filteredLeaderboard[1] && (
-              <View style={[styles.podiumPlace, styles.secondPlace]}>
-                <View style={[styles.podiumIcon, { backgroundColor: '#C0C0C0' }]}>
+              <Animated.View entering={FadeInDown.delay(400)} style={[styles.podiumPlace, styles.secondPlace]}>
+                <LinearGradient
+                  colors={['#C0C0C0', '#A0A0A0']}
+                  style={styles.podiumIcon}
+                >
                   <Trophy size={24} color="white" />
-                </View>
+                </LinearGradient>
                 <Text style={styles.podiumName}>{filteredLeaderboard[1].name}</Text>
                 <Text style={styles.podiumPoints}>{filteredLeaderboard[1].total_poin} poin</Text>
                 <Text style={styles.podiumRank}>#2</Text>
-              </View>
+              </Animated.View>
             )}
 
             {/* 1st Place */}
             {filteredLeaderboard[0] && (
-              <View style={[styles.podiumPlace, styles.firstPlace]}>
-                <View style={[styles.podiumIcon, { backgroundColor: '#FFD700' }]}>
+              <Animated.View entering={FadeInDown.delay(500)} style={[styles.podiumPlace, styles.firstPlace]}>
+                <LinearGradient
+                  colors={['#FFD700', '#FFA500']}
+                  style={styles.podiumIcon}
+                >
                   <Crown size={28} color="white" />
-                </View>
+                </LinearGradient>
                 <Text style={styles.podiumName}>{filteredLeaderboard[0].name}</Text>
                 <Text style={styles.podiumPoints}>{filteredLeaderboard[0].total_poin} poin</Text>
                 <Text style={styles.podiumRank}>#1</Text>
-              </View>
+              </Animated.View>
             )}
 
             {/* 3rd Place */}
             {filteredLeaderboard[2] && (
-              <View style={[styles.podiumPlace, styles.thirdPlace]}>
-                <View style={[styles.podiumIcon, { backgroundColor: '#CD7F32' }]}>
+              <Animated.View entering={FadeInDown.delay(600)} style={[styles.podiumPlace, styles.thirdPlace]}>
+                <LinearGradient
+                  colors={['#CD7F32', '#B8860B']}
+                  style={styles.podiumIcon}
+                >
                   <Medal size={24} color="white" />
-                </View>
+                </LinearGradient>
                 <Text style={styles.podiumName}>{filteredLeaderboard[2].name}</Text>
                 <Text style={styles.podiumPoints}>{filteredLeaderboard[2].total_poin} poin</Text>
                 <Text style={styles.podiumRank}>#3</Text>
-              </View>
+              </Animated.View>
             )}
           </View>
-        </View>
+        </Animated.View>
       )}
 
       {/* Full Leaderboard */}
-      <View style={styles.section}>
+      <Animated.View entering={FadeInUp.delay(400)} style={styles.section}>
         <Text style={styles.sectionTitle}>
           {searchQuery ? `Hasil Pencarian (${filteredLeaderboard.length})` : 'Semua Peringkat'}
         </Text>
@@ -218,14 +304,18 @@ export default function LeaderboardScreen() {
             const isCurrentUser = entry.id === profile?.id;
             
             return (
-              <View 
+              <Animated.View 
                 key={entry.id} 
+                entering={SlideInRight.delay(entry.rank * 50)}
                 style={[styles.leaderboardCard, isCurrentUser && styles.currentUserCard]}
               >
                 <View style={styles.rankContainer}>
-                  <View style={[styles.rankIconContainer, { backgroundColor: getRankColor(entry.rank) }]}>
+                  <LinearGradient
+                    colors={[getRankColor(entry.rank), getRankColor(entry.rank) + 'CC']}
+                    style={styles.rankIconContainer}
+                  >
                     <RankIcon size={16} color="white" />
-                  </View>
+                  </LinearGradient>
                   <Text style={styles.rankText}>#{entry.rank}</Text>
                 </View>
 
@@ -244,26 +334,37 @@ export default function LeaderboardScreen() {
 
                 <View style={styles.achievementBadges}>
                   {entry.rank <= 3 && (
-                    <View style={[styles.achievementBadge, { backgroundColor: getRankColor(entry.rank) + '20' }]}>
+                    <LinearGradient
+                      colors={[getRankColor(entry.rank) + '20', getRankColor(entry.rank) + '10']}
+                      style={styles.achievementBadge}
+                    >
                       <Text style={[styles.achievementText, { color: getRankColor(entry.rank) }]}>
                         {entry.rank === 1 ? 'Juara 1' : entry.rank === 2 ? 'Juara 2' : 'Juara 3'}
                       </Text>
-                    </View>
+                    </LinearGradient>
                   )}
+                  <View style={styles.trendingIndicator}>
+                    <TrendingUp size={12} color="#10B981" />
+                  </View>
                 </View>
-              </View>
+              </Animated.View>
             );
           })}
         </View>
-      </View>
+      </Animated.View>
 
       {/* Achievement Categories */}
-      <View style={styles.section}>
+      <Animated.View entering={FadeInUp.delay(500)} style={styles.section}>
         <Text style={styles.sectionTitle}>Kategori Pencapaian</Text>
         
         <View style={styles.categoryCards}>
-          <View style={styles.categoryCard}>
+          <Animated.View entering={SlideInRight.delay(600)} style={styles.categoryCard}>
+            <LinearGradient
+              colors={['#10B981', '#059669']}
+              style={styles.categoryGradient}
+            >
             <BookOpen size={24} color="#10B981" />
+            </LinearGradient>
             <Text style={styles.categoryTitle}>Top Hafalan</Text>
             <Text style={styles.categoryLeader}>
               {leaderboard.sort((a, b) => b.poin_hafalan - a.poin_hafalan)[0]?.name || '-'}
@@ -271,10 +372,15 @@ export default function LeaderboardScreen() {
             <Text style={styles.categoryPoints}>
               {leaderboard.sort((a, b) => b.poin_hafalan - a.poin_hafalan)[0]?.poin_hafalan || 0} poin
             </Text>
-          </View>
+          </Animated.View>
 
-          <View style={styles.categoryCard}>
+          <Animated.View entering={SlideInRight.delay(700)} style={styles.categoryCard}>
+            <LinearGradient
+              colors={['#3B82F6', '#2563EB']}
+              style={styles.categoryGradient}
+            >
             <Trophy size={24} color="#3B82F6" />
+            </LinearGradient>
             <Text style={styles.categoryTitle}>Top Quiz</Text>
             <Text style={styles.categoryLeader}>
               {leaderboard.sort((a, b) => b.poin_quiz - a.poin_quiz)[0]?.name || '-'}
@@ -282,9 +388,9 @@ export default function LeaderboardScreen() {
             <Text style={styles.categoryPoints}>
               {leaderboard.sort((a, b) => b.poin_quiz - a.poin_quiz)[0]?.poin_quiz || 0} poin
             </Text>
-          </View>
+          </Animated.View>
         </View>
-      </View>
+      </Animated.View>
     </ScrollView>
   );
 }
@@ -292,60 +398,106 @@ export default function LeaderboardScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#F8FAFC',
   },
   header: {
-    backgroundColor: 'white',
-    padding: 24,
-    paddingTop: 60,
+    shadowColor: '#F59E0B',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  headerGradient: {
+    paddingVertical: 32,
+    paddingHorizontal: 24,
     alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+  },
+  headerIcon: {
+    width: 64,
+    height: 64,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: Math.min(28, width * 0.07),
     fontWeight: 'bold',
-    color: '#1F2937',
-    marginTop: 8,
+    color: 'white',
+    marginBottom: 8,
   },
   headerSubtitle: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginTop: 4,
+    fontSize: Math.min(16, width * 0.04),
+    color: 'white',
+    opacity: 0.9,
+  },
+  searchFilterContainer: {
+    padding: 16,
+    gap: 12,
+    marginTop: -16,
   },
 
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'white',
-    margin: 16,
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 16,
     gap: 12,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    shadowRadius: 8,
+    elevation: 4,
   },
   searchInput: {
     flex: 1,
     fontSize: 16,
     color: '#1F2937',
   },
+  filterContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  filterButton: {
+    backgroundColor: 'white',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  filterButtonActive: {
+    backgroundColor: '#10B981',
+    borderColor: '#10B981',
+  },
+  filterButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  filterButtonTextActive: {
+    color: 'white',
+  },
   myRankCard: {
     backgroundColor: 'white',
-    margin: 16,
+    marginHorizontal: 16,
+    marginBottom: 16,
     padding: 20,
-    borderRadius: 12,
+    borderRadius: 16,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowRadius: 12,
+    elevation: 5,
   },
   myRankTitle: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#1F2937',
     marginBottom: 12,
@@ -356,41 +508,49 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   rankBadge: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
   },
   rankNumber: {
     color: 'white',
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
   },
   myRankInfo: {
     flex: 1,
   },
   myRankName: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
     color: '#1F2937',
   },
   myRankPoints: {
-    fontSize: 14,
+    fontSize: 16,
     color: '#10B981',
     fontWeight: '600',
     marginTop: 2,
   },
+  pointsBreakdownMy: {
+    marginTop: 4,
+  },
+  pointsDetailMy: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
  podiumContainer: {
     backgroundColor: 'white',
     margin: 16,
-    paddingVertical: 20,
-    borderRadius: 16,
+    paddingVertical: 24,
+    borderRadius: 20,
     shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 8,
-    elevation: 2,
+    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 16,
+    elevation: 8,
   },
   podium: {
     flexDirection: 'row',
@@ -432,87 +592,85 @@ const styles = StyleSheet.create({
   },
 
   podiumIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: 'white',
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 8,
     shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 6,
   },
   podiumName: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: 'bold',
     color: '#1F2937',
     textAlign: 'center',
+    marginBottom: 4,
   },
   podiumPoints: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#10B981',
     fontWeight: '600',
+    marginBottom: 2,
   },
   podiumRank: {
-    fontSize: 12,
+    fontSize: 10,
     color: '#6B7280',
     fontWeight: 'bold',
-    marginTop: 4,
   },
   section: {
     margin: 16,
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
     color: '#1F2937',
     marginBottom: 16,
   },
     leaderboardList: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    gap: 12,
   },
   leaderboardCard: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 10,
+    borderRadius: 16,
+    padding: 20,
     shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
    currentUserCard: {
     borderWidth: 2,
     borderColor: '#10B981',
-    backgroundColor: '#ECFDF5',
+    backgroundColor: '#F0FDF4',
   },
   rankContainer: {
     alignItems: 'center',
     gap: 4,
   },
   rankIconContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
   },
    rankText: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: 'bold',
     color: '#6B7280',
   },
     userInfo: {
     flex: 1,
-    marginLeft: 12,
+    marginLeft: 16,
   },
   userName: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#1F2937',
   },
@@ -523,27 +681,36 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   totalPoints: {
-    fontSize: 13,
+    fontSize: 16,
     fontWeight: 'bold',
     color: '#10B981',
-    marginTop: 2,
   },
   pointsDetail: {
-    fontSize: 12,
+    fontSize: 13,
     color: '#6B7280',
     marginTop: 2,
+    fontWeight: '500',
   },
   achievementBadges: {
     alignItems: 'flex-end',
+    gap: 4,
   },
   achievementBadge: {
     paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
+    paddingVertical: 6,
+    borderRadius: 12,
   },
   achievementText: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: 'bold',
+  },
+  trendingIndicator: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#DCFCE7',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   categoryCards: {
     flexDirection: 'row',
@@ -552,32 +719,39 @@ const styles = StyleSheet.create({
   categoryCard: {
     flex: 1,
     backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 16,
+    padding: 20,
     alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  categoryGradient: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
   },
   categoryTitle: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: 'bold',
     color: '#1F2937', 
-    marginTop: 8,
     marginBottom: 8,
   },
   categoryLeader: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '600',
     color: '#6B7280',
     textAlign: 'center',
+    marginBottom: 4,
   },
   categoryPoints: {
-    fontSize: 12,
+    fontSize: 14,
     color: '#10B981',
     fontWeight: 'bold',
-    marginTop: 2,
   },
 });
